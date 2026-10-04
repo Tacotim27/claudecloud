@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Three.js House</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe3f5; }
+    canvas { display: block; }
+    #hint {
+      position: fixed; left: 16px; bottom: 16px;
+      padding: 6px 10px; border-radius: 6px;
+      font: 13px/1.4 system-ui, sans-serif; color: #fff;
+      background: rgba(0, 0, 0, 0.45); pointer-events: none;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
