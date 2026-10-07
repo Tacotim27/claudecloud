@@ -5,12 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Makima</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a0508; font-family: system-ui, sans-serif; }
-  canvas { display: block; }
-  #hint {
-    position: fixed; left: 0; right: 0; bottom: 14px; text-align: center;
-    color: #e8b9a8; font-size: 13px; letter-spacing: .08em; pointer-events: none; opacity: .8;
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse 70% 80% at 50% 38%, #8a2a2a 0%, #4a1218 42%, #16060a 100%);
+    color: #f6e2d8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
+  canvas { display: block; }
+  #title { position: fixed; top: 22px; left: 26px; pointer-events: none; }
+  #title h1 { margin: 0; font: 600 24px/1 Georgia, "Times New Roman", serif; letter-spacing: .38em; }
+  #title p { margin: 8px 0 0; font-size: 11px; letter-spacing: .22em; opacity: .6; text-transform: uppercase; }
+  #ui { position: fixed; top: 20px; right: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  #ui button {
+    background: rgba(255, 235, 225, .07); color: inherit; cursor: pointer;
+    border: 1px solid rgba(255, 220, 205, .25); border-radius: 999px;
+    padding: 7px 14px; font: 12px system-ui, sans-serif; letter-spacing: .06em;
+  }
+  #ui button:hover, #ui button.on { background: rgba(255, 220, 205, .2); }
+  #hint { position: fixed; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 12px;
+          letter-spacing: .1em; opacity: .55; pointer-events: none; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -20,263 +32,668 @@
 </script>
 </head>
 <body>
-<div id="hint">drag to rotate · scroll to zoom · right-drag to pan</div>
+<div id="title"><h1>MAKIMA</h1><p>Chainsaw Man · Public Safety</p></div>
+<div id="ui">
+  <button data-view="full">Full body</button>
+  <button data-view="portrait">Portrait</button>
+  <button data-view="back">Braid</button>
+  <button id="spin">Auto-rotate</button>
+</div>
+<div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 
-// ---------- scene ----------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const params = new URLSearchParams(location.search);
+
+// ───────────────────────── renderer / scene ─────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 
+const effect = new OutlineEffect(renderer, {
+  defaultThickness: 0.0032, defaultColor: [0.16, 0.06, 0.06], defaultAlpha: 1,
+});
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x2a0a10);
-scene.fog = new THREE.Fog(0x2a0a10, 5, 12);
-
-const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 50);
-camera.position.set(0.6, 1.5, 3.4);
-
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.03, 50);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.0, 0);
 controls.enableDamping = true;
-controls.minDistance = 0.8;
-controls.maxDistance = 8;
-controls.maxPolarAngle = Math.PI * 0.52;
-if (new URLSearchParams(location.search).has('close')) { camera.position.set(0.15, 1.68, 0.8); controls.target.set(0, 1.58, 0); }
-controls.update();
+controls.minDistance = 0.35;
+controls.maxDistance = 9;
+controls.maxPolarAngle = Math.PI * 0.55;
+controls.autoRotateSpeed = 1.2;
 
-// lights
-scene.add(new THREE.HemisphereLight(0xffe6d8, 0x3a0d14, 0.9));
-const key = new THREE.DirectionalLight(0xfff0e6, 2.2);
-key.position.set(2, 3.5, 3);
+scene.add(new THREE.HemisphereLight(0xfff3ec, 0x7a3d3d, 1.35));
+const key = new THREE.DirectionalLight(0xffffff, 2.4);
+key.position.set(1.1, 3.0, 3.2);
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.left = -1.5; key.shadow.camera.right = 1.5;
-key.shadow.camera.top = 2.5; key.shadow.camera.bottom = -0.5;
-key.shadow.bias = -0.0005;
+Object.assign(key.shadow.camera, { left: -1, right: 1, top: 2.1, bottom: -0.2, near: 0.5, far: 8 });
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.02;
 scene.add(key);
-const rim = new THREE.DirectionalLight(0xff4a3a, 1.6);
-rim.position.set(-3, 2.5, -3);
-scene.add(rim);
 
-// floor
-const floor = new THREE.Mesh(
-  new THREE.CircleGeometry(3, 64),
-  new THREE.MeshStandardMaterial({ color: 0x14070a, roughness: 0.85 })
-);
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-scene.add(floor);
+// ground: shadow catcher + soft contact shadow
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.ShadowMaterial({ opacity: 0.28 }));
+ground.material.userData.outlineParameters = { visible: false };
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+{
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  grd.addColorStop(0, 'rgba(10,0,2,0.55)'); grd.addColorStop(1, 'rgba(10,0,2,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+  const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false });
+  mat.userData.outlineParameters = { visible: false };
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.55), mat);
+  blob.rotation.x = -Math.PI / 2; blob.position.y = 0.001;
+  scene.add(blob);
+}
 
-// ---------- materials ----------
-const mat = (color, rough = 0.7, extra = {}) =>
-  new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, ...extra });
-const skin   = mat(0xf2d3c0, 0.65);
-const hairM  = mat(0xb34a26, 0.5);
-const hairD  = mat(0x8f3818, 0.55);
-const shirt  = mat(0xf4f1ec, 0.8);
-const black  = mat(0x101012, 0.6);
-const lips   = mat(0xc98080, 0.5);
+// ───────────────────────── helpers ─────────────────────────
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const smooth = (e0, e1, x) => { const t = clamp01((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
 
-function mesh(geo, material, { pos, rot, scl, parent } = {}) {
-  const m = new THREE.Mesh(geo, material);
-  if (pos) m.position.set(...pos);
-  if (rot) m.rotation.set(...rot);
-  if (scl) m.scale.set(...scl);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  (parent || makima).add(m);
+// Catmull-Rom through keyframes [[t, a, b, ...], ...] → f(t) = [a, b, ...]
+function keyed(keys) {
+  return t => {
+    let k = 0;
+    while (k < keys.length - 2 && t > keys[k + 1][0]) k++;
+    const k0 = keys[Math.max(k - 1, 0)], k1 = keys[k], k2 = keys[k + 1], k3 = keys[Math.min(k + 2, keys.length - 1)];
+    const u = clamp01((t - k1[0]) / (k2[0] - k1[0]));
+    const out = [];
+    for (let i = 1; i < k1.length; i++) {
+      const p0 = k0[i], p1 = k1[i], p2 = k2[i], p3 = k3[i];
+      out.push(0.5 * (2 * p1 + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u
+                      + (-p0 + 3 * p1 - 3 * p2 + p3) * u * u * u));
+    }
+    return out;
+  };
+}
+
+// Sweep an elliptical cross-section along a smooth path.
+//   radius(t) → [side, front, back] half-extents
+//   front(t, P, T) → rough "front" direction for orienting the section
+//   mod(t, angle) → optional radial multiplier (bulges, folds)
+const FWD = V(0, 0, 1);
+function loft(points, { radius, front = () => FWD, mod = null, radial = 22, steps = 40 }) {
+  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+  const pos = [], idx = [], ends = [];
+  const P = V(), T = V(), S = V(), F = V();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    curve.getPointAt(t, P);
+    curve.getTangentAt(t, T);
+    F.copy(front(t, P, T));
+    S.crossVectors(T, F).normalize();
+    F.crossVectors(S, T).normalize();
+    const r = radius(t);
+    const rs = Math.max(r[0], 0), rf = Math.max(r[1], 0), rb = Math.max(r[2] ?? r[1], 0);
+    for (let j = 0; j < radial; j++) {
+      const a = (j / radial) * Math.PI * 2;
+      const m = mod ? mod(t, a) : 1;
+      const sn = Math.sin(a);
+      const x = rs * Math.cos(a) * m, y = (sn >= 0 ? rf : rb) * sn * m;
+      pos.push(P.x + S.x * x + F.x * y, P.y + S.y * x + F.y * y, P.z + S.z * x + F.z * y);
+    }
+    if (i === 0 || i === steps) ends.push(P.clone());
+  }
+  for (let i = 0; i < steps; i++) for (let j = 0; j < radial; j++) {
+    const a = i * radial + j, b = i * radial + (j + 1) % radial, c = a + radial, d = b + radial;
+    idx.push(a, c, b, b, c, d);
+  }
+  const n = pos.length / 3, last = steps * radial;
+  pos.push(...ends[0].toArray(), ...ends[1].toArray());
+  for (let j = 0; j < radial; j++) {
+    const j1 = (j + 1) % radial;
+    idx.push(n, j, j1, n + 1, last + j1, last + j);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// mirror a non-indexed geometry in x and keep its faces pointing outward
+function mirrorX(geo) {
+  geo.scale(-1, 1, 1);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i += 3) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    p.setXYZ(i, p.getX(i + 2), p.getY(i + 2), p.getZ(i + 2));
+    p.setXYZ(i + 2, x, y, z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// ───────────────────────── materials ─────────────────────────
+const gradientMap = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([105, 190, 255]), 3, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+const skinGradient = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([190, 255]), 2, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+function toon(color, outline, extra = {}) {
+  const m = new THREE.MeshToonMaterial({ color, gradientMap, ...extra });
+  m.userData.outlineParameters = { thickness: 0.0032, color: outline, alpha: 1, visible: true };
+  return m;
+}
+const M = {
+  skin:   toon(0xffe6da, [0.42, 0.2, 0.17], { gradientMap: skinGradient }),
+  hair:   toon(0xd65c50, [0.3, 0.07, 0.05]),
+  hairDk: toon(0xbd4b42, [0.28, 0.06, 0.05]),
+  shirt:  toon(0xf7f5f2, [0.22, 0.2, 0.24]),
+  black:  toon(0x26252c, [0.02, 0.02, 0.03]),
+  tie:    toon(0x18181d, [0.0, 0.0, 0.0]),
+  sole:   toon(0x141417, [0.0, 0.0, 0.0]),
+  band:   toon(0x2a1a1c, [0.05, 0.02, 0.02]),
+};
+M.hair.side = THREE.DoubleSide;
+
+function add(parent, geo, mat, cast = true) {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = cast;
+  parent.add(m);
   return m;
 }
 
-const makima = new THREE.Group();
+// ───────────────────────── rig ─────────────────────────
+const makima = new THREE.Group();          // whole figure
+const upper = new THREE.Group();           // breathes
+makima.add(upper);
 scene.add(makima);
 
-// ---------- legs & shoes ----------
-for (const s of [-1, 1]) {
-  mesh(new THREE.CylinderGeometry(0.088, 0.062, 0.84, 24), black, { pos: [s * 0.093, 0.5, 0] });
-  // shoe
-  mesh(new THREE.CapsuleGeometry(0.052, 0.14, 8, 16), black,
-       { pos: [s * 0.095, 0.045, 0.06], rot: [Math.PI / 2, 0, 0], scl: [1, 1, 0.65] });
-}
+const HEAD_PIVOT = V(0, 1.507, -0.01);
+const headPivot = new THREE.Group();
+headPivot.position.copy(HEAD_PIVOT);
+upper.add(headPivot);
+const head = new THREE.Group();            // origin = centre of the skull
+head.position.set(0, 0.095, 0.01);
+headPivot.add(head);
+const HEAD_CENTER = HEAD_PIVOT.clone().add(head.position);
 
-// ---------- hips + torso ----------
-mesh(new THREE.CylinderGeometry(0.125, 0.17, 0.22, 32), black, { pos: [0, 0.97, 0], scl: [1, 1, 0.68] });
-mesh(new THREE.CylinderGeometry(0.125, 0.115, 0.45, 32), shirt, { pos: [0, 1.185, 0], scl: [1, 1, 0.68] });
-// upper chest / shoulder line
-mesh(new THREE.SphereGeometry(0.13, 32, 16), shirt, { pos: [0, 1.4, 0], scl: [1.3, 0.42, 0.72] });
-// belt
-mesh(new THREE.CylinderGeometry(0.138, 0.138, 0.03, 32), mat(0x050505, 0.4), { pos: [0, 1.08, 0], scl: [1, 1, 0.68] });
-mesh(new THREE.BoxGeometry(0.035, 0.03, 0.01), mat(0xb8a37a, 0.3, { metalness: 0.8 }), { pos: [0, 1.08, 0.098] });
+// ───────────────────────── body: torso ─────────────────────────
+// [y, side, front, back]
+const torsoKeys = [
+  [0.99, 0.116, 0.072, 0.072],
+  [1.05, 0.111, 0.068, 0.068],
+  [1.10, 0.106, 0.066, 0.066],
+  [1.16, 0.110, 0.070, 0.068],
+  [1.22, 0.121, 0.078, 0.072],
+  [1.28, 0.130, 0.086, 0.076],
+  [1.32, 0.135, 0.086, 0.078],
+  [1.36, 0.137, 0.076, 0.078],
+  [1.395, 0.138, 0.066, 0.074],
+  [1.425, 0.115, 0.058, 0.064],
+  [1.448, 0.078, 0.05, 0.052],
+  [1.462, 0.045, 0.038, 0.040],
+];
+const torsoY0 = torsoKeys[0][0], torsoY1 = torsoKeys.at(-1)[0];
+const torsoR = keyed(torsoKeys.map(([y, ...r]) => [(y - torsoY0) / (torsoY1 - torsoY0), ...r]));
+const tOfY = y => clamp01((y - torsoY0) / (torsoY1 - torsoY0));
+// soft bust shaping on the front half of the section
+const bust = t => 0.2 * Math.exp(-(((t - tOfY(1.295)) / 0.07) ** 2));
+const torsoMod = (t, a) => {
+  if (a > Math.PI) return 1;
+  const u = a - Math.PI / 2;
+  return 1 + bust(t) * Math.exp(-(((Math.abs(u) - 0.62) / 0.42) ** 2)) - bust(t) * 0.45 * Math.exp(-((u / 0.28) ** 2));
+};
+const torsoFrontZ = y => torsoR(tOfY(y))[1] * torsoMod(tOfY(y), Math.PI / 2);
+const torsoBackZ = y => -torsoR(tOfY(y))[2];
 
-// bust (subtle)
-for (const s of [-1, 1]) {
-  mesh(new THREE.SphereGeometry(0.058, 24, 16), shirt, { pos: [s * 0.055, 1.31, 0.05], scl: [1, 0.95, 0.85] });
-}
-
-// trapezius
-mesh(new THREE.SphereGeometry(0.075, 24, 12), shirt, { pos: [0, 1.445, -0.005], scl: [1.7, 0.5, 0.95] });
-
-// shoulders
-for (const s of [-1, 1]) {
-  mesh(new THREE.SphereGeometry(0.052, 20, 16), shirt, { pos: [s * 0.165, 1.405, 0] });
-}
+add(upper, loft([V(0, torsoY0, 0), V(0, 1.2, 0.002), V(0, torsoY1, -0.006)],
+  { radius: torsoR, mod: torsoMod, radial: 48, steps: 60 }), M.shirt);
 
 // neck
-mesh(new THREE.CylinderGeometry(0.036, 0.042, 0.1, 20), skin, { pos: [0, 1.5, 0] });
+add(upper, loft([V(0, 1.43, -0.012), V(0, 1.5, -0.012), V(0, 1.57, -0.016)],
+  { radius: () => [0.026, 0.027, 0.03], radial: 24, steps: 8 }), M.skin);
 
-// collar
+// collar band + folded wings ending in points either side of the knot
+add(upper, loft([V(0, 1.432, -0.01), V(0, 1.452, -0.012), V(0, 1.474, -0.015)],
+  { radius: t => [0.04 - t * 0.004, 0.043 - t * 0.004, 0.04 - t * 0.003], radial: 32, steps: 4 }), M.shirt);
 for (const s of [-1, 1]) {
-  mesh(new THREE.BoxGeometry(0.075, 0.035, 0.012), shirt,
-       { pos: [s * 0.032, 1.465, 0.04], rot: [0.25, s * -0.45, s * -0.35] });
+  add(upper, loft([V(s * 0.03, 1.462, -0.045), V(s * 0.047, 1.452, -0.01), V(s * 0.047, 1.446, 0.02),
+                   V(s * 0.03, 1.436, 0.05), V(s * 0.034, 1.416, 0.064), V(s * 0.043, 1.396, 0.07)], {
+    front: (t, P) => V(P.x, 0.45, P.z + 0.012).normalize(),
+    radius: keyed([[0, 0.011, 0.0028], [0.45, 0.012, 0.0028], [0.7, 0.014, 0.0028], [0.88, 0.009, 0.0026], [1, 0.0006, 0.002]]),
+    radial: 12, steps: 40 }), M.shirt);
 }
-mesh(new THREE.TorusGeometry(0.045, 0.012, 8, 24), shirt, { pos: [0, 1.46, -0.005], rot: [Math.PI / 2, 0, 0], scl: [1, 1, 1] });
 
-// tie
-mesh(new THREE.BoxGeometry(0.03, 0.036, 0.02), black, { pos: [0, 1.435, 0.062], rot: [0.28, 0, 0] });
-const tie = mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.28, 4, 1), black,
-                 { pos: [0, 1.285, 0.088], rot: [0.12, Math.PI / 4, 0], scl: [1, 1, 0.35] });
+// tie: knot + blade lying on the shirt
+add(upper, loft([V(0, 1.452, 0.048), V(0, 1.436, 0.058), V(0, 1.418, 0.064)],
+  { radius: t => [0.011 - t * 0.004, 0.0065, 0.006], radial: 16, steps: 6 }), M.tie);
+{
+  const pts = [];
+  for (let y = 1.418; y >= 1.10; y -= 0.035) pts.push(V(0, y, torsoFrontZ(y) + 0.005));
+  pts.push(V(0, 1.095, torsoFrontZ(1.095) + 0.005));
+  add(upper, loft(pts, {
+    radius: keyed([[0, 0.008, 0.0025], [0.15, 0.011, 0.0028], [0.8, 0.016, 0.003], [0.93, 0.013, 0.003], [1, 0.0005, 0.002]]),
+    radial: 16, steps: 50 }), M.tie);
+}
 
-// ---------- arms ----------
+// ───────────────────────── arms & hands ─────────────────────────
+function buildArm(s) {
+  const shoulder = V(s * 0.108, 1.4, -0.006);
+  const deltoid  = V(s * 0.157, 1.373, -0.006);
+  const elbow    = V(s * 0.193, 1.128, -0.03);
+  const wrist    = V(s * 0.204, 0.905, 0.018);
+  add(upper, loft([shoulder, deltoid, elbow, wrist], {
+    radius: keyed([[0, 0.044, 0.044], [0.12, 0.046, 0.046], [0.35, 0.041, 0.041], [0.55, 0.036, 0.036],
+                   [0.62, 0.037, 0.037], [0.9, 0.031, 0.03], [1, 0.03, 0.03]]),
+    radial: 24, steps: 40 }), M.shirt);
+  // cuff
+  const dir = wrist.clone().sub(elbow).normalize();
+  add(upper, loft([wrist.clone().addScaledVector(dir, -0.04), wrist.clone().addScaledVector(dir, 0.002)],
+    { radius: () => [0.033, 0.033], radial: 24, steps: 2 }), M.shirt);
+
+  // hand, modelled with fingers pointing down (-y), palm facing the thigh
+  const hand = new THREE.Group();
+  hand.position.copy(wrist);
+  hand.quaternion.setFromUnitVectors(V(0, -1, 0), dir);
+  upper.add(hand);
+  const inward = -s;                                   // palm direction along x
+  add(hand, loft([V(0, 0.01, 0), V(0, -0.04, 0.002), V(inward * 0.004, -0.082, 0.004)], {
+    radius: keyed([[0, 0.012, 0.017], [0.5, 0.0145, 0.024], [1, 0.0115, 0.023]]), radial: 18, steps: 12 }), M.skin);
+  const fingers = [[0.0155, 0.055], [0.0052, 0.062], [-0.0052, 0.058], [-0.0155, 0.047]];
+  for (const [z, len] of fingers) {
+    const curl = 0.012;
+    add(hand, loft([
+      V(inward * 0.002, -0.078, z + 0.003),
+      V(inward * 0.004, -0.078 - len * 0.45, z),
+      V(inward * (0.004 + curl * 0.6), -0.078 - len * 0.8, z - 0.001),
+      V(inward * (0.004 + curl), -0.078 - len, z - 0.002),
+    ], { radius: t => { const r = 0.0068 - t * 0.0016; const tip = Math.sqrt(clamp01((1 - t) / 0.08)); return [r * tip, r * tip]; },
+         radial: 12, steps: 12 }), M.skin);
+  }
+  add(hand, loft([V(inward * 0.006, -0.016, 0.013), V(inward * 0.01, -0.04, 0.024), V(inward * 0.012, -0.063, 0.022)],
+    { radius: t => { const r = 0.0098 - t * 0.0022; const tip = Math.sqrt(clamp01((1 - t) / 0.18)); return [r * tip, r * tip]; },
+      radial: 12, steps: 10 }), M.skin);
+}
+buildArm(-1); buildArm(1);
+
+// ───────────────────────── trousers & shoes ─────────────────────────
+{
+  const keys = [
+    [0.765, 0.03, 0.025, 0.03],
+    [0.80, 0.11, 0.062, 0.07],
+    [0.87, 0.142, 0.08, 0.088],
+    [0.93, 0.143, 0.084, 0.094],
+    [1.00, 0.133, 0.080, 0.086],
+    [1.06, 0.122, 0.074, 0.077],
+    [1.112, 0.118, 0.073, 0.073],
+  ];
+  const y0 = keys[0][0], y1 = keys.at(-1)[0];
+  add(makima, loft([V(0, y0, 0.002), V(0, y1, 0)],
+    { radius: keyed(keys.map(([y, ...r]) => [(y - y0) / (y1 - y0), ...r])), radial: 40, steps: 30 }), M.black);
+  // waistband
+  add(makima, loft([V(0, 1.084, 0), V(0, 1.112, 0)],
+    { radius: () => [0.122, 0.077, 0.077], radial: 40, steps: 2 }), M.black);
+}
 for (const s of [-1, 1]) {
-  const arm = new THREE.Group();
-  arm.position.set(s * 0.175, 1.4, 0);
-  arm.rotation.z = s * 0.1;
-  makima.add(arm);
-  mesh(new THREE.CapsuleGeometry(0.04, 0.28, 8, 16), shirt, { parent: arm, pos: [0, -0.2, 0] });
-  const fore = new THREE.Group();
-  fore.position.set(0, -0.37, 0);
-  fore.rotation.x = -0.18;
-  arm.add(fore);
-  mesh(new THREE.CapsuleGeometry(0.033, 0.22, 8, 16), shirt, { parent: fore, pos: [0, -0.14, 0] });
-  // cuff + hand
-  mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.03, 16), shirt, { parent: fore, pos: [0, -0.285, 0] });
-  mesh(new THREE.SphereGeometry(0.04, 16, 12), skin, { parent: fore, pos: [0, -0.34, 0], scl: [0.85, 1.4, 0.6] });
+  add(makima, loft([V(s * 0.06, 0.96, 0), V(s * 0.07, 0.82, 0.003), V(s * 0.078, 0.7, 0.006), V(s * 0.088, 0.48, 0.012),
+                    V(s * 0.09, 0.26, 0.002), V(s * 0.091, 0.068, -0.004)], {
+    radius: keyed([[0, 0.055, 0.058], [0.15, 0.07, 0.07], [0.3, 0.072, 0.072], [0.57, 0.064, 0.064], [0.82, 0.063, 0.063], [1, 0.066, 0.066]]),
+    // pressed crease down the front of each leg
+    mod: (t, a) => 1 + 0.05 * smooth(0.05, 0.25, t) * Math.exp(-(((a - Math.PI / 2) / 0.09) ** 2)),
+    radial: 48, steps: 40 }), M.black);
+  // shoe (low-heeled pump)
+  add(makima, loft([V(s * 0.09, 0.055, -0.055), V(s * 0.091, 0.05, 0.0), V(s * 0.093, 0.036, 0.07), V(s * 0.095, 0.026, 0.14)], {
+    front: () => V(0, 1, 0),
+    radius: keyed([[0, 0.026, 0.024, 0.022], [0.3, 0.033, 0.028, 0.034], [0.7, 0.035, 0.02, 0.032], [0.92, 0.024, 0.012, 0.022], [1, 0.006, 0.004, 0.006]]),
+    radial: 24, steps: 30 }), M.sole);
+  add(makima, loft([V(s * 0.09, 0.0, -0.045), V(s * 0.09, 0.04, -0.045)],
+    { radius: t => [0.012 + t * 0.004, 0.012 + t * 0.006], radial: 12, steps: 2 }), M.sole);
 }
 
-// ---------- head ----------
-const head = new THREE.Group();
-head.position.set(0, 1.62, 0);
-makima.add(head);
-
-mesh(new THREE.SphereGeometry(0.1, 48, 32), skin, { parent: head, scl: [0.9, 1.16, 0.96] });
-// nose
-mesh(new THREE.SphereGeometry(0.011, 12, 8), skin, { parent: head, pos: [0, -0.025, 0.098], scl: [0.8, 1, 1] });
-
-// eyes — concentric ringed irises
-function makeEye(side) {
-  const g = new THREE.Group();
-  g.position.set(side * 0.04, 0.0, 0.0905);
-  g.rotation.y = side * 0.38;
-  const flat = (geo, color, z) => {
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      color, polygonOffset: true, polygonOffsetFactor: -z * 100, polygonOffsetUnits: -z * 100 }));
-    m.position.z = z * 0.0004;
-    g.add(m);
-  };
-  flat(new THREE.CircleGeometry(0.0235, 40), 0xe9c24a, 1);
-  flat(new THREE.RingGeometry(0.0185, 0.0205, 40), 0xb8741f, 2);
-  flat(new THREE.RingGeometry(0.0125, 0.0145, 40), 0xb8741f, 3);
-  flat(new THREE.RingGeometry(0.0065, 0.0082, 40), 0xb8741f, 4);
-  flat(new THREE.CircleGeometry(0.0035, 24), 0x2a1204, 5);
-  // lid / lash line
-  const lid = new THREE.Mesh(new THREE.TorusGeometry(0.0245, 0.0022, 6, 40, Math.PI),
-                             new THREE.MeshBasicMaterial({ color: 0x3a1608 }));
-  lid.position.z = 0.0035;
-  lid.rotation.z = 0.12 * side;
-  g.add(lid);
-  head.add(g);
+// ───────────────────────── head ─────────────────────────
+const HEAD_R = V(0.083, 0.104, 0.093);
+function headGeometry() {
+  const g = new THREE.SphereGeometry(1, 80, 64);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const low = smooth(0.15, -1.05, y);
+    const front = smooth(-0.25, 0.85, z);
+    x *= 1 - 0.55 * low ** 1.6 * (0.3 + 0.7 * front);    // soft V-shaped jaw
+    y -= 0.2 * low * low * front;                        // chin drops…
+    y += 0.22 * low * (1 - front);                       // …under-jaw tucks up toward the neck
+    z += 0.10 * low * front;                             // chin forward a touch
+    if (z < 0) z *= 1.07;                                // rounder skull
+    x *= HEAD_R.x; y *= HEAD_R.y; z *= HEAD_R.z;
+    // tiny anime nose
+    if (z > 0) z += 0.0055 * Math.exp(-((x / 0.0055) ** 2 + ((y + 0.041) / 0.011) ** 2));
+    p.setXYZ(i, x, y, z);
+  }
+  g.computeVertexNormals();
+  return g;
 }
-makeEye(-1); makeEye(1);
+const headMesh = add(head, headGeometry(), M.skin);
 
-// mouth: gentle smile
-const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.0035, 8, 24, Math.PI * 0.8), lips);
-mouth.position.set(0, -0.058, 0.0905);
-mouth.rotation.z = Math.PI + (Math.PI - Math.PI * 0.8) / 2 - Math.PI;
-mouth.rotation.z = Math.PI * 1.1;
-mouth.scale.set(1, 0.55, 1);
-head.add(mouth);
+// ───────────────────────── face (painted) ─────────────────────────
+const FACE = { cy: -0.03, size: 0.17 };
+function paintFace(closed) {
+  const S = 2048, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const k = S / FACE.size;
+  g.setTransform(k, 0, 0, -k, S / 2, S / 2 + k * FACE.cy);   // draw in head-local metres, y up
+  g.lineCap = 'round'; g.lineJoin = 'round';
 
-// ---------- hair ----------
-// cranium
-mesh(new THREE.SphereGeometry(0.106, 48, 32), hairM, { parent: head, pos: [0, 0.03, -0.03], scl: [0.98, 1.06, 0.95] });
-// back hair mass falling to shoulders
-mesh(new THREE.CylinderGeometry(0.085, 0.115, 0.26, 32, 1, true), hairD,
-     { parent: head, pos: [0, -0.1, -0.045], scl: [1, 1, 0.9] }).material.side = THREE.DoubleSide;
-mesh(new THREE.SphereGeometry(0.1, 32, 16), hairD, { parent: head, pos: [0, -0.1, -0.075], scl: [1.0, 1.35, 0.7] });
+  // faint blush
+  for (const s of [-1, 1]) {
+    const gr = g.createRadialGradient(s * 0.043, -0.042, 0, s * 0.043, -0.042, 0.014);
+    gr.addColorStop(0, 'rgba(240,140,130,0.14)'); gr.addColorStop(1, 'rgba(240,140,130,0)');
+    g.fillStyle = gr; g.fillRect(s * 0.043 - 0.02, -0.062, 0.04, 0.04);
+  }
 
-// bangs: tufts hanging over the forehead
-const bangCount = 9;
-for (let i = 0; i < bangCount; i++) {
-  const t = i / (bangCount - 1) - 0.5;      // -0.5 .. 0.5
-  const ang = t * 1.9;
-  const len = 0.085 - Math.abs(t) * 0.03;
-  const tuft = mesh(new THREE.ConeGeometry(0.024, len, 10), hairM, {
-    parent: head,
-    pos: [Math.sin(ang) * 0.088, 0.098 - len / 2, Math.cos(ang) * 0.082],
-    scl: [1, 1, 0.5],
-  });
-  tuft.rotation.order = 'YXZ';
-  tuft.rotation.set(Math.PI - 0.3, ang, 0);
+  for (const s of [-1, 1]) {
+    const ex = s * 0.0325, ey = -0.011, w = 0.034, h = 0.02;
+    const E = (u, v) => [ex + s * (u - 0.5) * w, ey + v * h];
+    const mv = p => g.moveTo(...p);
+    const bz = (a, b, c2) => g.bezierCurveTo(...a, ...b, ...c2);
+
+    // brow: thin, long, gently arched
+    g.beginPath();
+    g.moveTo(s * 0.012, 0.0145);
+    g.bezierCurveTo(s * 0.026, 0.0215, s * 0.042, 0.0215, s * 0.054, 0.0135);
+    g.bezierCurveTo(s * 0.042, 0.019, s * 0.026, 0.0185, s * 0.012, 0.0145);
+    g.lineWidth = 0.0008; g.strokeStyle = '#9c4436'; g.fillStyle = '#9c4436'; g.fill(); g.stroke();
+
+    if (closed) {
+      g.beginPath(); mv(E(-0.02, 0.0)); bz(E(0.25, -0.32), E(0.72, -0.34), E(1.12, 0.04));
+      g.lineWidth = 0.0015; g.strokeStyle = '#2e1310'; g.stroke();
+      g.beginPath(); mv(E(0.95, -0.08)); g.lineTo(...E(1.13, -0.2)); g.lineWidth = 0.0008; g.stroke();
+      continue;
+    }
+
+    const eyeShape = () => {
+      g.beginPath(); mv(E(0, 0));
+      bz(E(0.17, 0.52), E(0.62, 0.62), E(1, 0.12));
+      bz(E(0.84, -0.42), E(0.32, -0.5), E(0, 0));
+      g.closePath();
+    };
+    // sclera
+    g.save();
+    eyeShape(); g.fillStyle = '#fffaf6'; g.fill(); g.clip();
+    // iris — golden with concentric rings
+    const ix = ex + s * 0.0008, iy = ey - 0.0012, rx = 0.0092, ry = 0.011;
+    const ell = r => { g.beginPath(); g.ellipse(ix, iy, rx * r, ry * r, 0, 0, Math.PI * 2); };
+    let gr = g.createRadialGradient(ix, iy, 0, ix, iy, ry);
+    gr.addColorStop(0, '#f8de8c'); gr.addColorStop(0.65, '#ecc055'); gr.addColorStop(1, '#cf8f2d');
+    ell(1); g.fillStyle = gr; g.fill();
+    g.lineWidth = 0.0008; g.strokeStyle = '#8a4515'; g.stroke();
+    for (const r of [0.8, 0.6, 0.41]) { ell(r); g.lineWidth = 0.0006; g.strokeStyle = 'rgba(165,88,22,0.95)'; g.stroke(); }
+    ell(0.18); g.fillStyle = '#5a280a'; g.fill();
+    // shadow of the upper lid across the iris
+    gr = g.createLinearGradient(0, ey + 0.0125, 0, ey - 0.001);
+    gr.addColorStop(0, 'rgba(95,32,20,0.6)'); gr.addColorStop(1, 'rgba(95,32,20,0)');
+    g.fillStyle = gr; g.fillRect(ex - 0.03, ey - 0.012, 0.06, 0.03);
+    g.restore();
+
+    // heavy upper lash line with an outer flick
+    g.beginPath(); mv(E(-0.03, 0.02));
+    bz(E(0.16, 0.68), E(0.64, 0.82), E(1.16, 0.08));
+    bz(E(1.06, 0.13), E(1.03, 0.13), E(1, 0.12));
+    bz(E(0.62, 0.62), E(0.17, 0.52), E(0, 0));
+    g.closePath(); g.fillStyle = '#2e1310'; g.fill();
+    // lower lash line (outer half)
+    g.beginPath(); mv(E(0.32, -0.45)); bz(E(0.55, -0.48), E(0.86, -0.32), E(0.99, 0.08));
+    g.lineWidth = 0.00055; g.strokeStyle = 'rgba(70,25,20,0.85)'; g.stroke();
+    // double-lid crease
+    g.beginPath(); mv(E(0.14, 0.8)); bz(E(0.4, 1.02), E(0.76, 0.98), E(1.0, 0.56));
+    g.lineWidth = 0.0005; g.strokeStyle = 'rgba(150,75,65,0.6)'; g.stroke();
+  }
+
+  // nose hint
+  g.beginPath(); g.moveTo(0.0018, -0.0425); g.lineTo(-0.0008, -0.0465);
+  g.lineWidth = 0.0007; g.strokeStyle = 'rgba(175,100,88,0.75)'; g.stroke();
+  // that small, knowing smile
+  g.beginPath(); g.moveTo(-0.0105, -0.0625);
+  g.quadraticCurveTo(0, -0.0688, 0.0105, -0.0625);
+  g.lineWidth = 0.0008; g.strokeStyle = '#8c3e36'; g.stroke();
+  g.beginPath(); g.moveTo(-0.003, -0.0722); g.quadraticCurveTo(0, -0.0732, 0.003, -0.0722);
+  g.lineWidth = 0.0005; g.strokeStyle = 'rgba(185,105,95,0.55)'; g.stroke();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
 }
-// side locks framing the face
+const faceOpen = paintFace(false), faceClosed = paintFace(true);
+const faceMat = new THREE.MeshToonMaterial({
+  map: faceOpen, gradientMap: skinGradient, transparent: true, depthWrite: false,
+  polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+});
+faceMat.userData.outlineParameters = { visible: false };
+scene.updateMatrixWorld(true);
+{
+  const geo = new DecalGeometry(headMesh, HEAD_CENTER.clone().add(V(0, FACE.cy, 0.1)), new THREE.Euler(),
+                                V(FACE.size, FACE.size, 0.14));
+  geo.applyMatrix4(head.matrixWorld.clone().invert());
+  const decal = new THREE.Mesh(geo, faceMat);
+  decal.renderOrder = 1;
+  head.add(decal);
+}
+
+// ───────────────────────── hair ─────────────────────────
+const CAP = { c: V(0, 0.014, -0.01), r: V(0.093, 0.104, 0.105) };
+const capPoint = (theta, phi, extra = 0) => V(
+  CAP.c.x + Math.sin(theta) * Math.sin(phi) * CAP.r.x * (1 + extra),
+  CAP.c.y + Math.cos(phi) * CAP.r.y * (1 + extra),
+  CAP.c.z + Math.cos(theta) * Math.sin(phi) * CAP.r.z * (1 + extra));
+// a point just outside the face/skull surface at height y, azimuth theta
+const surf = (theta, y, m) => {
+  const q = Math.sqrt(Math.max(0, 1 - (y / HEAD_R.y) ** 2));
+  return V(Math.sin(theta) * (HEAD_R.x * q + m), y, Math.cos(theta) * (HEAD_R.z * q + m));
+};
+const radialFront = (t, P) => V(P.x, Math.max(P.y, 0), P.z).normalize();
+
+// skull cap, opened over the face
+{
+  const g = new THREE.SphereGeometry(1, 64, 48, 0, Math.PI * 2, 0, Math.PI * 0.86);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const face = smooth(0.2, 0.55, z) * smooth(0.5, 0.2, y);
+    // tuck the lower front/sides away inside the jaw
+    const under = smooth(-0.2, -0.55, y) * smooth(-0.05, 0.3, z);
+    const k = (1 - 0.3 * face) * (1 - 0.45 * under);
+    // narrow the lower back onto the neck
+    const narrow = smooth(-0.6, -0.98, y);
+    x *= 1 - 0.3 * narrow; z *= 1 - 0.15 * narrow;
+    // pull the back down toward the nape
+    const nape = smooth(-0.2, -0.8, z) * smooth(0.1, -0.6, y);
+    y -= 0.35 * nape; z *= 1 - 0.12 * nape;
+    p.setXYZ(i, CAP.c.x + x * CAP.r.x * k, CAP.c.y + y * CAP.r.y * k, CAP.c.z + z * CAP.r.z * k);
+  }
+  g.computeVertexNormals();
+  add(head, g, M.hair);
+}
+
+function strand(points, width, thick, mat = M.hair, { pointed = true, tipWidth = 0 } = {}) {
+  return add(head, loft(points, {
+    front: radialFront,
+    radius: t => {
+      const body = 0.72 + 0.28 * smooth(0, 0.35, t);
+      const taper = pointed ? 1 - t ** 2.2 : lerp(1, tipWidth / width, t);
+      return [width * body * taper, thick * (0.45 + 0.55 * (1 - t))];
+    },
+    radial: 14, steps: 36,
+  }), mat);
+}
+
+// bangs: [azimuth, tip height, width scale]
+const bangs = [
+  [-1.32, -0.05, 1.0], [-1.08, -0.022, 1.1], [-0.84, 0.01, 1.15], [-0.58, 0.017, 1.2],
+  [-0.33, 0.01, 1.2], [-0.1, -0.002, 1.1], [0.13, 0.006, 1.2], [0.38, 0.016, 1.2],
+  [0.63, 0.013, 1.15], [0.88, -0.008, 1.1], [1.12, -0.03, 1.0], [1.36, -0.058, 1.0],
+];
+bangs.forEach(([th, tipY, wm], i) => {
+  const m = 0.006 + (i % 2) * 0.003;
+  strand([
+    capPoint(th * 0.3, 0.12, 0.02),
+    capPoint(th * 0.7, 0.55, 0.035),
+    capPoint(th * 0.95, 0.98, 0.05),
+    surf(th, 0.04, m + 0.004),
+    surf(th * 1.01, (0.04 + tipY) / 2, m + 0.001),
+    surf(th * 1.03, tipY, m),
+  ], 0.017 * wm, 0.0048, i % 3 === 1 ? M.hairDk : M.hair);
+});
+
+// long side locks framing the face
 for (const s of [-1, 1]) {
-  mesh(new THREE.CapsuleGeometry(0.017, 0.15, 6, 12), hairM,
-       { parent: head, pos: [s * 0.088, -0.045, 0.04], rot: [0.05, 0, s * 0.08] });
-  mesh(new THREE.ConeGeometry(0.018, 0.06, 10), hairM,
-       { parent: head, pos: [s * 0.09, -0.155, 0.04], rot: [Math.PI, 0, 0] });
+  strand([capPoint(s * 1.22, 0.8, 0.045), V(s * 0.087, 0.035, 0.052), V(s * 0.089, -0.03, 0.052),
+          V(s * 0.084, -0.1, 0.048), V(s * 0.074, -0.172, 0.052)], 0.021, 0.0075);
+  strand([capPoint(s * 1.5, 0.75, 0.045), V(s * 0.097, 0.01, 0.024), V(s * 0.096, -0.07, 0.018),
+          V(s * 0.088, -0.15, 0.02), V(s * 0.08, -0.195, 0.026)], 0.026, 0.008, M.hairDk);
+  strand([capPoint(s * 1.05, 0.9, 0.05), V(s * 0.079, 0.03, 0.068), V(s * 0.08, -0.02, 0.07),
+          V(s * 0.077, -0.07, 0.064)], 0.013, 0.004);
 }
 
-// ---------- braid over the shoulder ----------
-const braidCurve = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-0.085, 1.66, -0.06),
-  new THREE.Vector3(-0.14, 1.58, -0.01),
-  new THREE.Vector3(-0.17, 1.5, 0.055),
-  new THREE.Vector3(-0.155, 1.4, 0.115),
-  new THREE.Vector3(-0.125, 1.3, 0.13),
-  new THREE.Vector3(-0.1, 1.2, 0.125),
-  new THREE.Vector3(-0.09, 1.1, 0.115),
-]);
+// back of the head sweeping into the braid
+const BRAID_ROOT_LOCAL = V(0, -0.09, -0.086);
+for (let i = 0; i <= 12; i++) {
+  const th = lerp(1.75, 2 * Math.PI - 1.75, i / 12);
+  const off = Math.sin(th) * 0.012;
+  strand([
+    capPoint(th, 0.22, 0.02),
+    capPoint(th, 0.95, 0.035),
+    capPoint(lerp(th, Math.PI, 0.35), 1.55, 0.035),
+    V(off * 1.4, -0.068, -0.098),
+    BRAID_ROOT_LOCAL.clone().add(V(off, 0.004, 0)),
+  ], 0.03, 0.0065, i % 2 ? M.hair : M.hairDk, { pointed: false, tipWidth: 0.012 });
+}
+
+// hair from behind the ears swept back into the braid
+for (const s of [-1, 1]) {
+  for (const [th, w] of [[1.55, 0.03], [1.8, 0.032]]) {
+    strand([
+      capPoint(s * th, 0.75, 0.04),
+      capPoint(s * (th + 0.1), 1.35, 0.05),
+      V(s * 0.072, -0.065, -0.035),
+      V(s * 0.04, -0.088, -0.075),
+      BRAID_ROOT_LOCAL.clone().add(V(s * 0.008, 0.002, 0)),
+    ], w, 0.0065, th > 1.6 ? M.hairDk : M.hair, { pointed: false, tipWidth: 0.012 });
+  }
+}
+
+// three-strand braid down the back
 const braid = new THREE.Group();
-makima.add(braid);
-const segs = 22;
-for (let i = 0; i < segs; i++) {
-  const u = i / (segs - 1);
-  const p = braidCurve.getPoint(u);
-  const tan = braidCurve.getTangent(u);
-  const r = 0.038 * (1 - u * 0.55);
-  // alternate links to suggest the interlocking weave
-  const side = i % 2 ? 1 : -1;
-  const link = mesh(new THREE.SphereGeometry(r, 16, 12), i % 2 ? hairM : hairD, {
-    parent: braid, pos: [p.x + side * 0.006, p.y, p.z],
-    scl: [0.85, 0.9, 0.85],
-  });
-  link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan);
+const BRAID_ROOT = HEAD_CENTER.clone().add(BRAID_ROOT_LOCAL);
+braid.position.copy(BRAID_ROOT);
+upper.add(braid);
+{
+  const ys = [BRAID_ROOT.y, 1.46, 1.39, 1.31, 1.23, 1.15, 1.085];
+  const pts = ys.map((y, i) => i === 0 ? V(0, y, BRAID_ROOT.z)
+                                        : V(Math.sin(i * 0.9) * 0.004, y, torsoBackZ(Math.max(y, 0.99)) - 0.018 - (i < 2 ? 0.01 : 0)));
+  const curve = new THREE.CatmullRomCurve3(pts.map(p => p.sub(BRAID_ROOT)), false, 'centripetal');
+  const lobe = new THREE.SphereGeometry(1, 24, 16);
+  const B = V(0, 0, -1), P = V(), T = V(), S = V(), Y = V(), Z = V(), X = V();
+  const N = 30;
+  for (let i = 0; i < N; i++) {
+    const t = 0.02 + (i / (N - 1)) * 0.92;
+    curve.getPointAt(t, P); curve.getTangentAt(t, T);
+    S.crossVectors(T, B).normalize();
+    const side = i % 2 ? 1 : -1;
+    const sz = 1 - 0.38 * t;
+    Y.copy(T).addScaledVector(S, -side * 0.62).normalize();
+    Z.copy(B).addScaledVector(Y, -B.dot(Y)).normalize();
+    X.crossVectors(Y, Z);
+    const m = add(braid, lobe, side > 0 ? M.hair : M.hairDk);
+    m.position.copy(P).addScaledVector(S, side * 0.0085 * sz).addScaledVector(B, 0.002);
+    m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+    m.scale.set(0.0125 * sz, 0.024 * sz, 0.0135 * sz);
+  }
+  // core so no gaps show between the lobes
+  add(braid, loft(curve.getPoints(12), { radius: t => [0.013 * (1 - 0.4 * t), 0.011 * (1 - 0.4 * t)], radial: 16, steps: 30 }), M.hairDk);
+  // tie + loose tuft
+  const end = curve.getPoint(0.965);
+  add(braid, loft([end.clone().add(V(0, 0.007, 0)), end.clone().add(V(0, -0.007, 0))],
+    { radius: () => [0.0095, 0.0095], radial: 16, steps: 2 }), M.band);
+  for (let j = 0; j < 7; j++) {
+    const a = (j / 7) * Math.PI * 2;
+    const spread = V(Math.cos(a) * 0.006, 0, Math.sin(a) * 0.004);
+    const len = 0.05 + (j % 3) * 0.012;
+    add(braid, loft([end.clone().add(spread.clone().multiplyScalar(0.5)),
+                     end.clone().add(spread).add(V(0, -len * 0.5, 0)),
+                     end.clone().add(spread.clone().multiplyScalar(1.8)).add(V(0, -len, 0))],
+      { radius: t => [0.0065 * (1 - t ** 1.8), 0.0045 * (1 - t ** 1.8)],
+        front: () => V(spread.x, 0, spread.z + 1e-4).normalize(), radial: 10, steps: 14 }),
+      j % 2 ? M.hair : M.hairDk);
+  }
 }
-// hair tie + tuft at the tip
-const tip = braidCurve.getPoint(1);
-mesh(new THREE.TorusGeometry(0.017, 0.006, 8, 16), black, { parent: braid, pos: [tip.x, tip.y - 0.005, tip.z], rot: [Math.PI / 2, 0, 0] });
-mesh(new THREE.ConeGeometry(0.02, 0.07, 12), hairM, { parent: braid, pos: [tip.x, tip.y - 0.045, tip.z], rot: [Math.PI, 0, 0] });
 
-// ---------- animation ----------
-const clock = new THREE.Clock();
-function animate() {
-  const t = clock.getElapsedTime();
-  const breath = Math.sin(t * 1.6) * 0.004;
-  makima.position.y = breath * 0.5;
-  head.rotation.y = Math.sin(t * 0.5) * 0.12;
-  head.rotation.x = Math.sin(t * 0.7) * 0.015;
-  braid.rotation.z = Math.sin(t * 0.9) * 0.012;
-  controls.update();
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
+// ───────────────────────── views / UI ─────────────────────────
+const views = {
+  full:     { pos: V(0.55, 1.25, 3.6), target: V(0, 0.92, 0) },
+  portrait: { pos: V(0.18, 1.62, 0.62), target: V(0, 1.57, 0) },
+  back:     { pos: V(-0.9, 1.45, -1.4), target: V(0, 1.27, 0) },
+  side:     { pos: V(1.5, 1.5, 0.15), target: V(0, 1.45, 0) },
+};
+let tween = null;
+function setView(name, instant = false) {
+  const v = views[name];
+  if (!v) return;
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === name));
+  if (instant) { camera.position.copy(v.pos); controls.target.copy(v.target); controls.update(); return; }
+  tween = { from: camera.position.clone(), fromT: controls.target.clone(), v, t: 0 };
 }
-animate();
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+const spinBtn = document.getElementById('spin');
+spinBtn.addEventListener('click', () => { controls.autoRotate = !controls.autoRotate; spinBtn.classList.toggle('on', controls.autoRotate); });
+setView(params.get('view') || 'full', true);
+
+// ───────────────────────── animation ─────────────────────────
+const still = params.has('still');
+const clock = new THREE.Clock();
+let nextBlink = 2.5;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = still ? 0 : clock.elapsedTime;
+
+  upper.position.y = Math.sin(t * 1.5) * 0.0018;
+  headPivot.rotation.z = 0.07 + Math.sin(t * 0.45) * 0.025;      // her signature head tilt
+  headPivot.rotation.y = Math.sin(t * 0.3) * 0.08;
+  headPivot.rotation.x = 0.03 + Math.sin(t * 0.6) * 0.012;
+  braid.rotation.z = Math.sin(t * 0.8) * 0.015;
+  braid.rotation.x = Math.sin(t * 0.55) * 0.01;
+
+  if (!still && t > nextBlink) {
+    faceMat.map = faceClosed;
+    if (t > nextBlink + 0.12) { faceMat.map = faceOpen; nextBlink = t + 2.5 + Math.random() * 3.5; }
+  }
+
+  if (tween) {
+    tween.t = Math.min(1, tween.t + dt / 0.9);
+    const e = 1 - (1 - tween.t) ** 3;
+    camera.position.lerpVectors(tween.from, tween.v.pos, e);
+    controls.target.lerpVectors(tween.fromT, tween.v.target, e);
+    if (tween.t === 1) tween = null;
+  }
+  controls.update();
+  effect.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
