@@ -45,7 +45,7 @@ renderer.domElement.addEventListener('dblclick', () => setView('front'));
 // key from the upper front-left.
 scene.add(new THREE.HemisphereLight(0xffffff, 0xbdbdbd, 3.4));
 const key = new THREE.DirectionalLight(0xffffff, 0.6);
-key.position.set(-0.2, 0.6, 1);
+key.position.set(-0.45, 0.6, 1);
 scene.add(key);
 
 // ---------------------------------------------------------------------------
@@ -66,12 +66,12 @@ const mat = {
   shirtAO: flat(0xe9e3d4, { vertexColors: true }),
   collar: flat(0xe9e3d4, { side: THREE.DoubleSide }),
   tie: flat(0x2b2b2b),
-  pants: flat(0x2a2a2a),
-  band: flat(0x313133),
+  pantsAO: flat(0x2a2a2a, { vertexColors: true }),
+  band: flat(0x2b2b2d),
   loop: flat(0x242426),
   seam: flat(0x1c1c1c),
   crease: flat(0xa9a59a),
-  shoe: flat(0x4f3429),
+  shoeAO: flat(0x4f3429, { vertexColors: true }),
   sole: flat(0x24231f),
 };
 
@@ -181,17 +181,35 @@ function frontFaceZ(table, p, y, segs = 8) {
   return zc + ringPoint({ rx, rzF, p }, Math.PI / 2 - Math.PI / segs)[1];
 }
 
-// Bakes a grey per-vertex multiplier from f(x, y, z) into the geometry, used
-// to darken creases the way ambient occlusion would.
+// Bakes a grey multiplier from f(x, y, z, normal) into the geometry, used to
+// darken creases the way ambient occlusion would. Each triangle takes the value
+// at its centre, so whole facets shade evenly.
 function occlude(geometry, f) {
-  const p = geometry.attributes.position;
-  const col = new Float32Array(p.count * 3);
-  for (let i = 0; i < p.count; i++) col.fill(f(p.getX(i), p.getY(i), p.getZ(i)), i * 3, i * 3 + 3);
+  const p = geometry.attributes.position.array;
+  const col = new Float32Array(p.length);
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  for (let i = 0; i < p.length; i += 9) {
+    a.fromArray(p, i);
+    b.fromArray(p, i + 3);
+    c.fromArray(p, i + 6);
+    n.crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize();
+    const v = f((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3, n);
+    col.fill(v, i, i + 9);
+  }
   geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return geometry;
 }
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+// Dark cloth keeps more facet contrast than the soft light gives it (the
+// reference's tone mapping squashes the whites but not the blacks), so trousers
+// get extra modelling from a virtual light at the front left.
+const CLOTH_LIGHT = new THREE.Vector3(-0.6, 0.3, 0.75).normalize();
+const clothShade = (x, y, z, n) => 0.72 + 0.6 * Math.max(0, n.dot(CLOTH_LIGHT));
 // 0 below a, 1 between b and c, 0 above d, linear ramps between.
 const band = (y, a, b, c, d) => Math.min(clamp01((y - a) / (b - a)), clamp01((d - y) / (d - c)));
 
@@ -230,7 +248,10 @@ function buildShoe(s) {
     [0.168, 0.030, 0.014, 0.045, 0.012],
     [0.174, 0.019, 0.018, 0.036, 0.008],
   ].map((r) => ring(...r));
-  mesh(tube(upper, { up: [0, 1, 0] }), mat.shoe, g);
+  // The instep and the side facing the other foot sit in shade.
+  const upperGeo = occlude(tube(upper, { up: [0, 1, 0] }), (x, y) =>
+    (y > 0.072 ? 0.72 : 1) * (x * -s > 0.03 ? 0.62 : 1));
+  mesh(upperGeo, mat.shoeAO, g);
 
   const sole = [
     [-0.077, 0.027, 0.000, 0.014, 0.003],
@@ -286,8 +307,8 @@ const PELVIS_SEGS = 12;
 
 function buildTrousers() {
   const g = new THREE.Group();
-  mesh(buildLeg(-1), mat.pants, g);
-  mesh(buildLeg(1), mat.pants, g);
+  mesh(occlude(buildLeg(-1), clothShade), mat.pantsAO, g);
+  mesh(occlude(buildLeg(1), clothShade), mat.pantsAO, g);
   // The widest ring dips toward the sides, where it disappears into the legs,
   // leaving a V between the thighs at the front.
   const pelvis = loft(PELVIS, PELVIS_P, { segs: PELVIS_SEGS, phase: Math.PI / PELVIS_SEGS });
@@ -295,7 +316,7 @@ function buildTrousers() {
   for (let i = 0; i < pp.count; i++) {
     if (Math.abs(pp.getY(i) - PELVIS[1][0]) < 1e-6) pp.setY(i, PELVIS[1][0] - 0.05 * (Math.abs(pp.getX(i)) / 0.155) ** 1.6);
   }
-  mesh(pelvis, mat.pants, g);
+  mesh(occlude(pelvis, clothShade), mat.pantsAO, g);
 
   // Waistband with a bevelled top edge
   const BAND = [
@@ -493,7 +514,7 @@ function buildHand() {
 
 function buildArm(s) {
   const g = new THREE.Group();
-  // Sleeve path [x, y, z, r]: a pinch and bulge make the elbow fold, and the
+  // Sleeve path [x, y, z, r], written for the left arm (s = -1): a pinch and bulge make the elbow fold, and the
   // sleeve blouses over the cuff before tucking into it.
   const sleeve = [
     [-0.128, 1.386, -0.006, 0.000],
@@ -508,30 +529,31 @@ function buildArm(s) {
     [-0.180, 0.975, 0.008, 0.036],
     [-0.184, 0.953, 0.009, 0.0375],
     [-0.186, 0.938, 0.009, 0.026],
-  ].map(([x, y, z, r]) => ({ c: [s * x, y, z], rx: r, rz: r * 1.08 }));
+  ].map(([x, y, z, r]) => ({ c: [-s * x, y, z], rx: r, rz: r * 1.08 }));
   // Ring vertex angles (0 = outward on the left arm, mirrored on the right):
-  // a broad face toward the front and outside, a narrow one facing the body.
-  const angles = [0, 30, 95, 145, 190, 235, 285, 330].map((d) => ((s < 0 ? d : 180 - d) * Math.PI) / 180);
+  // one broad face from the outside edge round to the front, then a narrow,
+  // shaded face turned toward the body.
+  const angles = [0, 112, 160, 205, 255, 305].map((d) => ((s < 0 ? d : 180 - d) * Math.PI) / 180);
   if (s > 0) angles.reverse();
 
   // The inside of the sleeve, facing the body, is shaded.
   const axisX = (y) => lerpTable(sleeve.map((r) => [r.c[1], r.c[0]]).reverse(), y)[0];
   const sleeveGeo = occlude(tube(sleeve, { angles }), (x, y) => {
     const inner = clamp01(((x - axisX(y)) * -s / 0.036 - 0.2) / 0.6);
-    return 1 - 0.42 * inner * band(y, 0.98, 1.06, 1.3, 1.37);
+    return 1 - 0.55 * inner * band(y, 0.98, 1.06, 1.3, 1.37);
   });
   mesh(sleeveGeo, mat.shirtAO, g);
 
   const cuff = [
     [-0.186, 0.949, 0.009, 0.0300],
     [-0.192, 0.887, 0.010, 0.0288],
-  ].map(([x, y, z, r]) => ({ c: [s * x, y, z], rx: r, rz: r * 1.08, p: 2.6 }));
-  mesh(tube(cuff, { angles }), mat.shirt, g);
+  ].map(([x, y, z, r]) => ({ c: [-s * x, y, z], rx: r, rz: r * 1.08, p: 2.6 }));
+  mesh(tube(cuff, { segs: 8, phase: OCT }), mat.shirt, g);
 
   const wrist = [
     [-0.192, 0.905, 0.010, 0.017],
     [-0.195, 0.878, 0.010, 0.017],
-  ].map(([x, y, z, r]) => ({ c: [s * x, y, z], rx: r, rz: r * 1.2 }));
+  ].map(([x, y, z, r]) => ({ c: [-s * x, y, z], rx: r, rz: r * 1.2 }));
   mesh(tube(wrist, { segs: 6 }), mat.skin, g);
 
   const hand = buildHand();
@@ -611,12 +633,12 @@ function faceTexture() {
   fillPoly('#b98f6b', [[-0.040, 1.462], [-0.036, 1.4545], [0, 1.4295], [0.036, 1.4545], [0.040, 1.462], [0.040, 1.446], [0, 1.418], [-0.040, 1.446]]);
 
   // Nose: the shadowed plane right of the bridge and the underside
-  fillPoly('#d1a580', [[0.0003, 1.528], [-0.009, 1.5045], [0.001, 1.4965], [0.0135, 1.5065]]);
+  fillPoly('#d1a580', [[0.0003, 1.527], [-0.009, 1.5025], [0.001, 1.4940], [0.0135, 1.5045]]);
 
   // Mouth
-  stroke('#b98668', 0.0021, () => {
-    moveTo(-0.0177, 1.4815);
-    quad(0, 1.4787, 0.0177, 1.4815);
+  stroke('#a8735a', 0.0021, () => {
+    moveTo(-0.0177, 1.4792);
+    quad(0, 1.4766, 0.0177, 1.4792);
   });
 
   for (const s of [-1, 1]) {
@@ -627,11 +649,13 @@ function faceTexture() {
       quad(ex(0.0420), 1.5745, ex(0.0612), 1.5672);
     });
 
+    g.save();
+    g.translate(0, -0.003 * k); // eyes sit a touch higher than the grid they were drawn on
     const eye = () => {
       g.beginPath();
       moveTo(ex(0.0193), 1.5405);
-      quad(ex(0.0398), 1.5592, ex(0.0612), 1.5415);
-      quad(ex(0.0398), 1.5205, ex(0.0193), 1.5405);
+      quad(ex(0.0405), 1.5592, ex(0.0635), 1.5418);
+      quad(ex(0.0405), 1.5205, ex(0.0193), 1.5405);
       g.closePath();
     };
     eye();
@@ -643,7 +667,7 @@ function faceTexture() {
     g.clip();
     const ix = X(ex(0.0395));
     const iy = Y(1.5395);
-    const ir = 0.0099 * k;
+    const ir = 0.0090 * k;
     const disc = (style, r, dy = 0) => {
       g.fillStyle = style;
       g.beginPath();
@@ -661,9 +685,9 @@ function faceTexture() {
     g.fillStyle = '#140e0c';
     g.beginPath();
     moveTo(ex(0.0190), 1.5398);
-    quad(ex(0.0390), 1.5632, ex(0.0628), 1.5430);
-    lineTo(ex(0.0672), 1.5392);
-    lineTo(ex(0.0612), 1.5398);
+    quad(ex(0.0395), 1.5632, ex(0.0648), 1.5432);
+    lineTo(ex(0.0672), 1.5408);
+    lineTo(ex(0.0632), 1.5402);
     quad(ex(0.0400), 1.5542, ex(0.0205), 1.5390);
     g.closePath();
     g.fill();
@@ -676,6 +700,7 @@ function faceTexture() {
       moveTo(ex(0.0262), 1.5522);
       quad(ex(0.0400), 1.5600, ex(0.0565), 1.5520);
     });
+    g.restore();
   }
 
   const tex = new THREE.CanvasTexture(cv);
@@ -762,7 +787,7 @@ function hairPoint(y, a, off = 0) {
 // back behind the face, easing off toward the temples so the sides stay full.
 function shellFrontLimit(x, y) {
   const fold = lerpTable([[1.450, -0.004], [1.49, 0.024], [1.53, 0.034], [1.600, 0.034], [1.630, 0.12]], y)[0];
-  return fold + Math.max(0, Math.abs(x) - 0.064) * 10;
+  return fold + Math.max(0, Math.abs(x) - 0.073) * 10;
 }
 
 // A tapered blade of hair with a diamond cross-section along `points`;
@@ -867,6 +892,7 @@ function buildHair() {
     const sideLock = lock(pts, [0.012, 0.028, 0.031, 0.029, 0.027, 0.024, 0.015, 0], 0.008, [s * 0.2, 0, 1]);
     occlude(sideLock, (x) => 1 - 0.34 * clamp01((Math.abs(x) - 0.078) / 0.02));
     mesh(sideLock, mat.hairAO, g);
+
   }
 
   // Braid down the back
