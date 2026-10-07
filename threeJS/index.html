@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Low-Poly Makima</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #d2d1cf; }
+    canvas { display: block; }
+    #hint {
+      position: fixed; left: 0; right: 0; bottom: 16px; text-align: center;
+      font: 13px/1.4 system-ui, sans-serif; color: #6b6a68;
+      pointer-events: none; transition: opacity 0.6s;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hint">Drag to orbit · scroll to zoom · right-drag to pan · double-click to reset</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

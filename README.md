@@ -22,3 +22,18 @@ Drag to orbit, scroll to zoom, right-drag to pan.
 
 - `index.html`: page shell and import map
 - `main.js`: scene, house geometry, lighting and render loop
+
+## Low-poly figure (`threeJS/`)
+
+A flat-shaded, low-poly character recreated from a front reference image: red hair
+with a pointed fringe, side locks and a braid down the back, a white shirt with a
+folded collar and black tie, high-waisted black trousers and brown shoes. Every
+part is built in code from lofted cross-sections; the face (eyes, brows, nose
+shading, mouth) is painted onto a canvas texture projected from the front.
+
+Serve the repo as above and open http://localhost:8000/threeJS/. Add `?view=face`,
+`?view=side`, `?view=back` or `?view=three` to start from another angle; double-click
+returns to the front view.
+
+- `threeJS/index.html`: page shell and import map
+- `threeJS/main.js`: geometry helpers, figure parts, face texture and lighting
