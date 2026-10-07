@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neon City</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0418; }
+    canvas { display: block; }
+    .hud {
+      position: fixed; pointer-events: none;
+      font: 12px/1.5 "Consolas", "SFMono-Regular", ui-monospace, monospace;
+      color: #b8f7ff; letter-spacing: 0.08em; text-transform: uppercase;
+      text-shadow: 0 0 6px rgba(0, 240, 255, 0.8);
+    }
+    #title { left: 16px; top: 14px; }
+    #title h1 {
+      margin: 0; font-size: 22px; letter-spacing: 0.2em; color: #ff4fd8;
+      text-shadow: 0 0 8px #ff2bd6, 0 0 22px rgba(255, 43, 214, 0.6), 2px 0 0 rgba(0, 240, 255, 0.7);
+    }
+    #keys {
+      left: 16px; bottom: 16px; padding: 8px 12px;
+      border: 1px solid rgba(0, 240, 255, 0.45); border-left: 3px solid #ff2bd6;
+      background: rgba(10, 2, 24, 0.55);
+    }
+    #keys b { color: #fff200; font-weight: normal; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="title" class="hud">
+    <h1>NEO-KYOTO 2088</h1>
+    <div>Sector 7 · night cycle · rain advisory</div>
+  </div>
+  <div id="keys" class="hud">
+    Drag orbit · scroll zoom · right-drag pan<br>
+    <b>C</b> chase cam · <b>R</b> rain · <b>B</b> bloom · <b>Space</b> auto-rotate
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

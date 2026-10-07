@@ -22,3 +22,28 @@ Drag to orbit, scroll to zoom, right-drag to pan.
 
 - `index.html`: page shell and import map
 - `main.js`: scene, house geometry, lighting and render loop
+
+## Cyberpunk city (`cyberpunk/`)
+
+A low-poly, rain-soaked neon city at night: open `http://localhost:8000/cyberpunk/`
+with the same server as above.
+
+![Neon city overview](cyberpunk/preview.png)
+![Street level](cyberpunk/preview-street.png)
+
+- A 9×9 block grid of flat-shaded towers (boxes, stepped towers, hex prisms and
+  tapered pyramids) with procedurally lit windows, neon trim, rooftop antennas and
+  blinking warning lights. Buildings get taller toward the centre.
+- A central megatower with rotating crown rings, giant vertical signs, animated
+  billboards and sweeping searchlights.
+- Neon shop signs and awnings at street level, vertical katakana signs, and
+  shader-driven advertising screens that cycle and glitch.
+- A plaza with a floating wireframe hologram and neon cherry trees.
+- Flying cars in sky lanes and cars on the streets, with light trails.
+- Rain, a low-poly moon, stars and a distant skyline fading into the fog.
+- Bloom post-processing makes everything neon glow.
+
+The layout uses a seeded random generator, so it's the same city every load.
+
+Keys: **C** chase cam (ride along with a flying car), **R** rain, **B** bloom,
+**Space** auto-rotate.
